@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package
+      Name="PDF Manga Viewer"
+      Manufacturer="PdfMangaViewer"
+      Version="0.0.1"
+      ProductCode="72BF2822-A7AD-4030-A548-F2F32E46E0AA"
+      UpgradeCode="842FE880-FF45-4A5F-9470-C251764A2CE3"
+      Scope="perUser"
+      Language="1041"
+      Codepage="932">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Install per user without requiring elevation -->
+    <Property Id="ALLUSERS" Value="2" />
+    <Property Id="MSIINSTALLPERUSER" Value="1" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+
+    <Property Id="ARPCOMMENTS" Value="PDF manga viewer for Windows" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="PdfMangaViewer" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="ProductFeature" Title="PDF Manga Viewer" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppStartMenuFolder" Name="PDF Manga Viewer">
+        <Component Id="StartMenuShortcut" Guid="EC53B7CD-788F-419B-BA23-A371BCDC9442">
+          <Shortcut
+              Id="StartMenuShortcutLnk"
+              Name="PDF Manga Viewer"
+              Description="PDF Manga Viewer 0.0.1"
+              Target="[INSTALLFOLDER]PdfMangaViewer.exe"
+              WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="RemoveAppStartMenuFolder" Directory="AppStartMenuFolder" On="uninstall" />
+          <RegistryValue
+              Root="HKCU"
+              Key="Software\PdfMangaViewer"
+              Name="StartMenuShortcut"
+              Type="integer"
+              Value="1"
+              KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="DesktopShortcut" Guid="0B41AA80-D937-462A-8CE0-D61396CC211C">
+        <Shortcut
+            Id="DesktopShortcutLnk"
+            Name="PDF Manga Viewer"
+            Description="PDF Manga Viewer 0.0.1"
+            Target="[INSTALLFOLDER]PdfMangaViewer.exe"
+            WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue
+            Root="HKCU"
+            Key="Software\PdfMangaViewer"
+            Name="DesktopShortcut"
+            Type="integer"
+            Value="1"
+            KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+  </Fragment>
+</Wix>

@@ -1,0 +1,16 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+
+  <PropertyGroup>
+    <OutputName>PdfMangaViewer-Setup-0.0.1</OutputName>
+    <OutputPath>dist\</OutputPath>
+    <Platform>x64</Platform>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <!-- Per-user install only; ICE91 is expected. ICE03 flags a few .mui language IDs. -->
+    <SuppressIces>ICE03;ICE91</SuppressIces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.2" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>PdfMangaViewer</RootNamespace>
+    <AssemblyName>PdfMangaViewer</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+
+    <Version>0.0.1</Version>
+    <AssemblyVersion>0.0.1.0</AssemblyVersion>
+    <FileVersion>0.0.1.0</FileVersion>
+    <Product>PDF Manga Viewer</Product>
+    <Company>PdfMangaViewer</Company>
+    <Description>PDF manga viewer for Windows</Description>
+
+    <!-- 単体 exe として起動できるよう、Windows App SDK を同梱する -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.9169" />
+  </ItemGroup>
+
+  <!--
+    WinUI の XAML コンパイラが生成する .xbf と、アプリ用の .pri は
+    bin にだけコピーされ、dotnet publish の出力には含まれないことがある。
+    公開フォルダーにもコピーして、publish した exe がそのまま起動できるようにする。
+  -->
+  <Target Name="CopyWinUIResourcesToPublish" AfterTargets="CopyFilesToPublishDirectory">
+    <ItemGroup>
+      <_WinUIResourceFiles Include="$(OutDir)**\*.xbf" />
+      <_WinUIResourceFiles Include="$(OutDir)$(TargetName).pri" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_WinUIResourceFiles)"
+      DestinationFiles="@(_WinUIResourceFiles->'$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
