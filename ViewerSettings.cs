@@ -23,4 +23,7 @@ public sealed class ViewerSettings
 
     /// <summary>見開きを右から左に並べるか（既定はオン）。</summary>
     public bool RightToLeft { get; set; } = true;
+
+    /// <summary>右下にページ番号を常に表示するか。</summary>
+    public bool ShowPageNumber { get; set; }
 }

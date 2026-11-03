@@ -27,10 +27,13 @@ namespace PdfMangaViewer;
 public sealed partial class MainWindow : Window
 {
     /// <summary>キャッシュに保持するページ数の上限。</summary>
-    private const int MaxCachedPages = 8;
+    private const int MaxCachedPages = 12;
 
     /// <summary>レンダリングする画像の長辺の上限（px）。メモリ使用量の抑制用。</summary>
     private const double MaxRenderEdge = 2600;
+
+    /// <summary>連続でページ送りするときの最短間隔。押しっぱなしでも各ページが目に入る速さにする。</summary>
+    private static readonly TimeSpan MinStepInterval = TimeSpan.FromMilliseconds(80);
 
     private static readonly string SettingsDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -54,6 +57,7 @@ public sealed partial class MainWindow : Window
 
     private readonly Dictionary<uint, CachedPage> _cache = new();
     private readonly LinkedList<uint> _lru = new();
+    private readonly Dictionary<uint, PageSize> _pageSizes = new();
     private readonly SemaphoreSlim _renderGate = new(1, 1);
 
     private readonly DispatcherTimer _hideControlsTimer = new();
@@ -65,6 +69,7 @@ public sealed partial class MainWindow : Window
     private bool _rightToLeft = true;
     private SpreadMode _spreadMode = SpreadMode.Off;
     private bool _reverseKeys = true;
+    private bool _showPageNumber;
     private bool _controlsVisible;
     private bool _isFullScreen;
     private bool _dialogOpen;
@@ -74,6 +79,12 @@ public sealed partial class MainWindow : Window
     private int _renderVersion;
     private int _prefetchGeneration;
     private DateTime _lastWheelTurn = DateTime.MinValue;
+
+    private bool _isStepping;
+    private int _queuedStep;
+    private int _travelDirection = 1;
+    private DateTime _lastStepTime = DateTime.MinValue;
+    private bool _isSeeking;
 
     public MainWindow()
     {
@@ -92,6 +103,7 @@ public sealed partial class MainWindow : Window
         UpdateSpreadUi();
         UpdateReadingDirectionUi();
         UpdateNavigationUi();
+        UpdatePageNumberUi();
     }
 
     // ------------------------------------------------------------------
@@ -159,6 +171,8 @@ public sealed partial class MainWindow : Window
 
             _cache.Clear();
             _lru.Clear();
+            _pageSizes.Clear();
+            _travelDirection = 1;
 
             PageImage.Source = null;
             SpreadLeftImage.Source = null;
@@ -292,21 +306,35 @@ public sealed partial class MainWindow : Window
             return cached;
         }
 
-        CachedPage rendered = await RenderPageAsync(index, desired.Width, desired.Height);
-        if (version != _renderVersion)
+        CachedPage? rendered = await RenderPageAsync(index, desired, () => version != _renderVersion);
+        if (rendered is null || version != _renderVersion)
         {
             return null;
         }
 
-        CachePage(index, rendered);
         return rendered;
     }
 
-    private async Task<CachedPage> RenderPageAsync(uint index, int width, int height)
+    /// <summary>
+    /// ページをレンダリングしてキャッシュに入れる。
+    /// 順番待ちの間に先読みが同じページを描き終えていればそれを返し、
+    /// 待っている間に不要になった（isStale が true）場合は描かずに null を返す。
+    /// </summary>
+    private async Task<CachedPage?> RenderPageAsync(uint index, PixelSize desired, Func<bool> isStale)
     {
         await _renderGate.WaitAsync();
         try
         {
+            if (isStale())
+            {
+                return null;
+            }
+
+            if (TryGetCached(index, desired, out CachedPage? cached))
+            {
+                return cached;
+            }
+
             PdfDocument? document = _document;
             if (document is null)
             {
@@ -316,10 +344,12 @@ public sealed partial class MainWindow : Window
             using PdfPage page = document.GetPage(index);
             using var stream = new InMemoryRandomAccessStream();
 
+            // 既定の PNG は圧縮が重いので、すぐ読み戻せる BMP で受け取る
             var options = new PdfPageRenderOptions
             {
-                DestinationWidth = (uint)Math.Max(1, width),
-                DestinationHeight = (uint)Math.Max(1, height),
+                DestinationWidth = (uint)Math.Max(1, desired.Width),
+                DestinationHeight = (uint)Math.Max(1, desired.Height),
+                BitmapEncoderId = Windows.Graphics.Imaging.BitmapEncoder.BmpEncoderId,
             };
 
             await page.RenderToStreamAsync(stream, options);
@@ -328,7 +358,15 @@ public sealed partial class MainWindow : Window
             var bitmap = new BitmapImage();
             await bitmap.SetSourceAsync(stream);
 
-            return new CachedPage(bitmap, width, height);
+            var rendered = new CachedPage(bitmap, desired.Width, desired.Height);
+
+            // 描き終えたページは、表示が先へ進んでいても同じ PDF である限りキャッシュに残す
+            if (ReferenceEquals(_document, document))
+            {
+                CachePage(index, rendered);
+            }
+
+            return rendered;
         }
         finally
         {
@@ -361,10 +399,19 @@ public sealed partial class MainWindow : Window
             return new PageSize(1, 1);
         }
 
+        // GetPage は UI スレッドで呼ぶと重いので、寸法は一度取ったら覚えておく
+        if (_pageSizes.TryGetValue(index, out PageSize known))
+        {
+            return known;
+        }
+
         using PdfPage page = _document.GetPage(index);
-        return new PageSize(
+        var size = new PageSize(
             Math.Max(1.0, page.Size.Width),
             Math.Max(1.0, page.Size.Height));
+
+        _pageSizes[index] = size;
+        return size;
     }
 
     /// <summary>ページのアスペクト比を保ったまま画面に収まるレンダリングサイズを計算する。</summary>
@@ -609,19 +656,33 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            await Task.Delay(120);
+            // 表示側の描画を先に終わらせるため、ほんの少しだけ待つ
+            await Task.Delay(30);
             if (generation != _prefetchGeneration || _document is null)
             {
                 return;
             }
 
-            var pages = new List<uint>(4);
-            AddViewPages(pages, GetNextViewStart(viewStart));
+            // 進んでいる方向の2画面ぶんを優先し、そのあと逆方向の1画面を読む
+            int direction = _travelDirection;
+            var pages = new List<uint>(6);
 
-            uint previous = GetPreviousViewStart(viewStart);
-            if (previous != viewStart)
+            uint ahead = GetAdjacentViewStart(viewStart, direction);
+            if (ahead != viewStart)
             {
-                AddViewPages(pages, previous);
+                AddViewPages(pages, ahead);
+
+                uint ahead2 = GetAdjacentViewStart(ahead, direction);
+                if (ahead2 != ahead)
+                {
+                    AddViewPages(pages, ahead2);
+                }
+            }
+
+            uint behind = GetAdjacentViewStart(viewStart, -direction);
+            if (behind != viewStart)
+            {
+                AddViewPages(pages, behind);
             }
 
             foreach (uint pageIndex in pages)
@@ -642,14 +703,15 @@ public sealed partial class MainWindow : Window
                     continue;
                 }
 
-                CachedPage rendered = await RenderPageAsync(pageIndex, desired.Width, desired.Height);
+                CachedPage? rendered = await RenderPageAsync(
+                    pageIndex,
+                    desired,
+                    () => generation != _prefetchGeneration);
 
-                if (generation != _prefetchGeneration)
+                if (rendered is null || generation != _prefetchGeneration)
                 {
                     return;
                 }
-
-                CachePage(pageIndex, rendered);
             }
         }
         catch
@@ -677,32 +739,86 @@ public sealed partial class MainWindow : Window
     // ナビゲーション
     // ------------------------------------------------------------------
 
-    private void GoNext()
+    private void GoNext() => RequestStep(1);
+
+    private void GoPrevious() => RequestStep(-1);
+
+    /// <summary>
+    /// 1画面ぶん進む／戻る。表示が終わるまでは次の入力を1回分だけ預かるので、
+    /// キーを押しっぱなしにしても途中のページを飛ばさず1画面ずつ表示される。
+    /// </summary>
+    private void RequestStep(int direction)
     {
         if (_document is null)
         {
             return;
         }
 
-        uint next = GetNextViewStart(_pageIndex);
-        if (next < _document.PageCount)
+        _travelDirection = direction;
+
+        if (_isStepping)
         {
-            _ = ShowViewAsync(next);
+            _queuedStep = direction;
+            return;
+        }
+
+        _ = StepAsync(direction);
+    }
+
+    private async Task StepAsync(int direction)
+    {
+        _isStepping = true;
+        try
+        {
+            while (_document is not null)
+            {
+                // キャッシュ済みだとキーリピートの速さで一瞬で流れてしまうので、最低限の間隔を空ける
+                TimeSpan sinceLast = DateTime.UtcNow - _lastStepTime;
+                if (sinceLast < MinStepInterval)
+                {
+                    await Task.Delay(MinStepInterval - sinceLast);
+                }
+
+                uint target = GetAdjacentViewStart(_pageIndex, direction);
+                if (target == _pageIndex)
+                {
+                    break;
+                }
+
+                _lastStepTime = DateTime.UtcNow;
+                await ShowViewAsync(target);
+
+                if (_queuedStep == 0)
+                {
+                    break;
+                }
+
+                direction = _queuedStep;
+                _queuedStep = 0;
+            }
+        }
+        finally
+        {
+            _isStepping = false;
+            _queuedStep = 0;
         }
     }
 
-    private void GoPrevious()
+    /// <summary>指定方向の隣の表示の開始ページ。端で進めないときは start をそのまま返す。</summary>
+    private uint GetAdjacentViewStart(uint start, int direction)
     {
         if (_document is null)
         {
-            return;
+            return start;
         }
 
-        uint previous = GetPreviousViewStart(_pageIndex);
-        if (previous != _pageIndex)
+        if (direction > 0)
         {
-            _ = ShowViewAsync(previous);
+            uint next = GetNextViewStart(start);
+            return next < _document.PageCount ? next : start;
         }
+
+        return GetPreviousViewStart(start);
     }
 
     private void JumpTo(uint index)
@@ -726,6 +842,8 @@ public sealed partial class MainWindow : Window
         if (_document is null)
         {
             PageLabel.Text = "0 / 0";
+            CornerPageNumber.Text = string.Empty;
+            SetProgress(0);
             Title = "PDF Manga Viewer";
             return;
         }
@@ -736,9 +854,19 @@ public sealed partial class MainWindow : Window
         string range = first == last ? $"{first}" : $"{first}-{last}";
 
         PageLabel.Text = $"{range} / {_document.PageCount}";
+        CornerPageNumber.Text = PageLabel.Text;
+        UpdatePageNumberUi();
+        SetProgress((double)last / _document.PageCount);
 
         string name = _displayName ?? "PDF";
         Title = $"{name} ({range}/{_document.PageCount}) - PDF Manga Viewer";
+    }
+
+    private void SetProgress(double fraction)
+    {
+        ReadingProgress.Value = fraction;
+        VerticalProgressDoneRow.Height = new GridLength(fraction, GridUnitType.Star);
+        VerticalProgressRestRow.Height = new GridLength(1.0 - fraction, GridUnitType.Star);
     }
 
     private void UpdateNavigationUi()
@@ -845,8 +973,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // 非表示時はメニューバー付近に近づいたときだけ再表示する
-        if (IsPointNearControlsBar(e.GetCurrentPoint(RootGrid).Position))
+        // 非表示時はメニューバーか縦の進捗バーの付近に近づいたときだけ再表示する
+        Point position = e.GetCurrentPoint(RootGrid).Position;
+        if (IsPointNearControlsBar(position) || IsPointNearVerticalProgress(position))
         {
             ShowControls();
         }
@@ -900,6 +1029,25 @@ public sealed partial class MainWindow : Window
             && position.Y <= bounds.Y + bounds.Height + margin;
     }
 
+    /// <summary>縦の進捗バー（単ページ表示時の画面右端）付近にマウスがあるか。</summary>
+    private bool IsPointNearVerticalProgress(Point position)
+    {
+        if (VerticalProgressHitArea.Visibility != Visibility.Visible)
+        {
+            return false;
+        }
+
+        const double margin = 24;
+        double left = RootGrid.ActualWidth
+            - VerticalProgressHitArea.Margin.Right
+            - VerticalProgressHitArea.ActualWidth
+            - margin;
+
+        return position.X >= left
+            && position.Y >= VerticalProgressHitArea.Margin.Top
+            && position.Y <= RootGrid.ActualHeight - VerticalProgressHitArea.Margin.Bottom;
+    }
+
     private bool TryGetControlsBarBounds(out Rect bounds)
     {
         bounds = default;
@@ -920,6 +1068,88 @@ public sealed partial class MainWindow : Window
             bottomRight.X - topLeft.X,
             bottomRight.Y - topLeft.Y);
         return true;
+    }
+
+    private void ProgressHitArea_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        RootHost.Focus(FocusState.Pointer);
+
+        if (_document is null)
+        {
+            return;
+        }
+
+        var area = (UIElement)sender;
+        _isSeeking = area.CapturePointer(e.Pointer);
+        ShowControls();
+        SeekToPointer(area, e);
+    }
+
+    private void ProgressHitArea_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isSeeking)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ShowControls();
+        SeekToPointer((UIElement)sender, e);
+    }
+
+    private void ProgressHitArea_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isSeeking)
+        {
+            return;
+        }
+
+        _isSeeking = false;
+        ((UIElement)sender).ReleasePointerCapture(e.Pointer);
+    }
+
+    /// <summary>バー（横または縦）上のポインター位置に対応するページへ移動する。</summary>
+    private void SeekToPointer(UIElement area, PointerRoutedEventArgs e)
+    {
+        if (_document is null)
+        {
+            return;
+        }
+
+        Point position = e.GetCurrentPoint(area).Position;
+        double fraction;
+
+        if (area == VerticalProgressHitArea)
+        {
+            // 縦のバーは上が先頭
+            if (VerticalProgressHitArea.ActualHeight <= 0)
+            {
+                return;
+            }
+
+            fraction = position.Y / VerticalProgressHitArea.ActualHeight;
+        }
+        else
+        {
+            if (ProgressHitArea.ActualWidth <= 0)
+            {
+                return;
+            }
+
+            fraction = position.X / ProgressHitArea.ActualWidth;
+
+            // 右綴じのときはバーが右から伸びるので、位置も右端を先頭として扱う
+            if (_rightToLeft)
+            {
+                fraction = 1.0 - fraction;
+            }
+        }
+
+        fraction = Math.Clamp(fraction, 0.0, 1.0);
+
+        uint page = (uint)Math.Min(_document.PageCount - 1, Math.Floor(fraction * _document.PageCount));
+        JumpTo(page);
     }
 
     private void RootGrid_PointerExited(object sender, PointerRoutedEventArgs e)
@@ -984,8 +1214,10 @@ public sealed partial class MainWindow : Window
 
         _controlsVisible = true;
         ControlsBar.IsHitTestVisible = true;
+        VerticalProgressHitArea.IsHitTestVisible = true;
         AnimateOpacity(ControlsBar, 1, 140);
         AnimateOpacity(FileChip, 1, 140);
+        AnimateOpacity(VerticalProgressHitArea, 1, 140);
     }
 
     private void HideControls()
@@ -999,8 +1231,10 @@ public sealed partial class MainWindow : Window
 
         _controlsVisible = false;
         ControlsBar.IsHitTestVisible = false;
+        VerticalProgressHitArea.IsHitTestVisible = false;
         AnimateOpacity(ControlsBar, 0, 260);
         AnimateOpacity(FileChip, 0, 260);
+        AnimateOpacity(VerticalProgressHitArea, 0, 260);
     }
 
     private static void AnimateOpacity(UIElement element, double to, int milliseconds)
@@ -1070,11 +1304,30 @@ public sealed partial class MainWindow : Window
     private void UpdateReadingDirectionUi()
     {
         RtlToggle.IsChecked = _rightToLeft;
+        ReadingProgress.FlowDirection = _rightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         ToolTipService.SetToolTip(
             RtlToggle,
             _rightToLeft
                 ? "右から左に表示中（クリックで左から右へ）"
                 : "左から右に表示中（クリックで右から左へ）");
+    }
+
+    private void PageNumberToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _showPageNumber = PageNumberToggle.IsChecked == true;
+        UpdatePageNumberUi();
+        SaveSettings();
+
+        RootHost.Focus(FocusState.Programmatic);
+        ShowControls();
+    }
+
+    private void UpdatePageNumberUi()
+    {
+        PageNumberToggle.IsChecked = _showPageNumber;
+        CornerPageNumber.Visibility = _showPageNumber && _document is not null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void ReverseKeysToggle_Click(object sender, RoutedEventArgs e)
@@ -1131,6 +1384,11 @@ public sealed partial class MainWindow : Window
         SpreadCoverItem.IsChecked = _spreadMode == SpreadMode.CoverSingle;
         SpreadPairItem.IsChecked = _spreadMode == SpreadMode.PairFromStart;
         SpreadFirstTwoItem.IsChecked = _spreadMode == SpreadMode.FirstTwoSingle;
+
+        // 単ページ表示では左右に余白ができるので、進捗バーは画面右側に縦で出す
+        bool single = _spreadMode == SpreadMode.Off;
+        VerticalProgressHitArea.Visibility = single ? Visibility.Visible : Visibility.Collapsed;
+        ProgressHitArea.Visibility = single ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void LoadSettings()
@@ -1154,6 +1412,7 @@ public sealed partial class MainWindow : Window
                 }
 
                 _rightToLeft = settings.RightToLeft;
+                _showPageNumber = settings.ShowPageNumber;
             }
         }
         catch
@@ -1172,6 +1431,7 @@ public sealed partial class MainWindow : Window
             {
                 Spread = _spreadMode.ToString(),
                 RightToLeft = _rightToLeft,
+                ShowPageNumber = _showPageNumber,
             };
 
             File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings));
@@ -1345,6 +1605,13 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureTitleBar()
     {
+        // 未パッケージの WinUI アプリは exe のアイコンをタイトルバーに使わないので明示的に設定する
+        string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+        if (File.Exists(iconPath))
+        {
+            AppWindow.SetIcon(iconPath);
+        }
+
         if (!AppWindowTitleBar.IsCustomizationSupported())
         {
             return;

@@ -16,6 +16,7 @@
         HorizontalContentAlignment="Stretch"
         VerticalContentAlignment="Stretch"
         IsTabStop="True"
+        KeyboardAcceleratorPlacementMode="Hidden"
         UseSystemFocusVisuals="False">
 
         <ContentControl.KeyboardAccelerators>
@@ -154,6 +155,51 @@
                 </StackPanel>
             </Border>
 
+            <!-- 右下のページ番号（トグルでオンのときだけ常時表示） -->
+            <TextBlock
+                x:Name="CornerPageNumber"
+                Margin="0,0,16,12"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                FontFamily="Consolas"
+                FontSize="12"
+                Foreground="#59FFFFFF"
+                IsHitTestVisible="False"
+                Visibility="Collapsed" />
+
+            <!-- 単ページ表示のときの縦の進捗バー（上が先頭）。操作バーと一緒に出現 -->
+            <Grid
+                x:Name="VerticalProgressHitArea"
+                Width="24"
+                Margin="0,56,10,56"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Stretch"
+                Background="Transparent"
+                IsHitTestVisible="False"
+                Opacity="0"
+                PointerCanceled="ProgressHitArea_PointerReleased"
+                PointerCaptureLost="ProgressHitArea_PointerReleased"
+                PointerMoved="ProgressHitArea_PointerMoved"
+                PointerPressed="ProgressHitArea_PointerPressed"
+                PointerReleased="ProgressHitArea_PointerReleased"
+                ToolTipService.ToolTip="クリック・ドラッグでページ移動"
+                Visibility="Collapsed">
+                <Border
+                    Width="4"
+                    HorizontalAlignment="Center"
+                    Background="#33FFFFFF"
+                    CornerRadius="2" />
+                <Grid Width="4" HorizontalAlignment="Center">
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="VerticalProgressDoneRow" Height="0*" />
+                        <RowDefinition x:Name="VerticalProgressRestRow" Height="1*" />
+                    </Grid.RowDefinitions>
+                    <Border
+                        Background="{ThemeResource AccentFillColorDefaultBrush}"
+                        CornerRadius="2" />
+                </Grid>
+            </Grid>
+
             <!-- 下部の操作バー -->
             <Border
                 x:Name="ControlsBar"
@@ -167,135 +213,173 @@
                 CornerRadius="14"
                 IsHitTestVisible="False"
                 Opacity="0">
-                <StackPanel
-                    VerticalAlignment="Center"
-                    Orientation="Horizontal"
-                    Spacing="2">
-                    <Button
-                        x:Name="PrevButton"
-                        Click="PrevButton_Click"
-                        Content="&#xE76B;"
-                        Style="{StaticResource ViewerIconButtonStyle}"
-                        ToolTipService.ToolTip="前のページ (←)" />
-
-                    <Button
-                        x:Name="NextButton"
-                        Click="NextButton_Click"
-                        Content="&#xE76C;"
-                        Style="{StaticResource ViewerIconButtonStyle}"
-                        ToolTipService.ToolTip="次のページ (→)" />
-
-                    <Border
-                        Width="1"
+                <StackPanel Spacing="6">
+                    <!-- 全体の進捗（右綴じのときは右から伸びる） -->
+                    <!-- バーは細くてクリックしにくいので、透明な Grid で当たり判定を広げる -->
+                    <Grid
+                        x:Name="ProgressHitArea"
                         Height="16"
                         Margin="8,0"
-                        Background="#26FFFFFF" />
-
-                    <TextBlock
-                        x:Name="PageLabel"
-                        MinWidth="96"
-                        Margin="4,0"
-                        VerticalAlignment="Center"
-                        FontFamily="Consolas"
-                        FontSize="13"
-                        Foreground="#F2FFFFFF"
-                        Text="0 / 0"
-                        TextAlignment="Center" />
-
-                    <Border
-                        Width="1"
-                        Height="16"
-                        Margin="8,0"
-                        Background="#26FFFFFF" />
-
-                    <DropDownButton
-                        x:Name="SpreadButton"
-                        MinWidth="0"
-                        Padding="10,6"
-                        VerticalAlignment="Center"
                         Background="Transparent"
-                        BorderThickness="0"
-                        Content="見開き: なし"
-                        CornerRadius="8"
-                        FontSize="12"
-                        Foreground="#E6FFFFFF"
-                        ToolTipService.ToolTip="見開きの表示方法を変更">
-                        <DropDownButton.Flyout>
-                            <MenuFlyout
-                                Opening="SpreadFlyout_Opening"
-                                Closed="SpreadFlyout_Closed"
-                                Placement="Top">
-                                <RadioMenuFlyoutItem
-                                    x:Name="SpreadOffItem"
-                                    Click="SpreadModeItem_Click"
-                                    GroupName="SpreadMode"
-                                    Tag="Off"
-                                    Text="単ページ" />
-                                <RadioMenuFlyoutItem
-                                    x:Name="SpreadCoverItem"
-                                    Click="SpreadModeItem_Click"
-                                    GroupName="SpreadMode"
-                                    Tag="CoverSingle"
-                                    Text="見開き（表紙のみ単独）" />
-                                <RadioMenuFlyoutItem
-                                    x:Name="SpreadPairItem"
-                                    Click="SpreadModeItem_Click"
-                                    GroupName="SpreadMode"
-                                    Tag="PairFromStart"
-                                    Text="見開き（1ページ目から2枚ずつ）" />
-                                <RadioMenuFlyoutItem
-                                    x:Name="SpreadFirstTwoItem"
-                                    Click="SpreadModeItem_Click"
-                                    GroupName="SpreadMode"
-                                    Tag="FirstTwoSingle"
-                                    Text="見開き（1・2ページ目のみ単独）" />
-                            </MenuFlyout>
-                        </DropDownButton.Flyout>
-                    </DropDownButton>
+                        PointerCanceled="ProgressHitArea_PointerReleased"
+                        PointerCaptureLost="ProgressHitArea_PointerReleased"
+                        PointerMoved="ProgressHitArea_PointerMoved"
+                        PointerPressed="ProgressHitArea_PointerPressed"
+                        PointerReleased="ProgressHitArea_PointerReleased"
+                        ToolTipService.ToolTip="クリック・ドラッグでページ移動">
+                        <ProgressBar
+                            x:Name="ReadingProgress"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            Maximum="1"
+                            Minimum="0"
+                            Value="0" />
+                    </Grid>
 
-                    <ToggleButton
-                        x:Name="ReverseKeysToggle"
-                        MinWidth="0"
-                        Padding="10,6"
+                    <StackPanel
                         VerticalAlignment="Center"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Click="ReverseKeysToggle_Click"
-                        Content="キー反転"
-                        CornerRadius="8"
-                        FontSize="12"
-                        Foreground="#E6FFFFFF"
-                        IsChecked="True"
-                        ToolTipService.ToolTip="左右キーと矢印ボタンのページ送り方向を反転" />
+                        Orientation="Horizontal"
+                        Spacing="2">
+                        <Button
+                            x:Name="PrevButton"
+                            Click="PrevButton_Click"
+                            Content="&#xE76B;"
+                            Style="{StaticResource ViewerIconButtonStyle}"
+                            ToolTipService.ToolTip="前のページ (←)" />
 
-                    <ToggleButton
-                        x:Name="RtlToggle"
-                        MinWidth="0"
-                        Padding="10,6"
-                        VerticalAlignment="Center"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Click="RtlToggle_Click"
-                        Content="右綴じ"
-                        CornerRadius="8"
-                        FontSize="12"
-                        Foreground="#E6FFFFFF"
-                        IsChecked="True"
-                        ToolTipService.ToolTip="右から左に表示中（クリックで左から右へ）" />
+                        <Button
+                            x:Name="NextButton"
+                            Click="NextButton_Click"
+                            Content="&#xE76C;"
+                            Style="{StaticResource ViewerIconButtonStyle}"
+                            ToolTipService.ToolTip="次のページ (→)" />
 
-                    <Button
-                        x:Name="OpenFileButton"
-                        Click="OpenButton_Click"
-                        Content="&#xE8E5;"
-                        Style="{StaticResource ViewerIconButtonStyle}"
-                        ToolTipService.ToolTip="PDFを開く (Ctrl+O)" />
+                        <Border
+                            Width="1"
+                            Height="16"
+                            Margin="8,0"
+                            Background="#26FFFFFF" />
 
-                    <Button
-                        x:Name="FullScreenButton"
-                        Click="FullScreenButton_Click"
-                        Content="&#xE740;"
-                        Style="{StaticResource ViewerIconButtonStyle}"
-                        ToolTipService.ToolTip="全画面 (F11)" />
+                        <TextBlock
+                            x:Name="PageLabel"
+                            MinWidth="96"
+                            Margin="4,0"
+                            VerticalAlignment="Center"
+                            FontFamily="Consolas"
+                            FontSize="13"
+                            Foreground="#F2FFFFFF"
+                            Text="0 / 0"
+                            TextAlignment="Center" />
+
+                        <Border
+                            Width="1"
+                            Height="16"
+                            Margin="8,0"
+                            Background="#26FFFFFF" />
+
+                        <DropDownButton
+                            x:Name="SpreadButton"
+                            MinWidth="0"
+                            Padding="10,6"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Content="見開き: なし"
+                            CornerRadius="8"
+                            FontSize="12"
+                            Foreground="#E6FFFFFF"
+                            ToolTipService.ToolTip="見開きの表示方法を変更">
+                            <DropDownButton.Flyout>
+                                <MenuFlyout
+                                    Opening="SpreadFlyout_Opening"
+                                    Closed="SpreadFlyout_Closed"
+                                    Placement="Top">
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SpreadOffItem"
+                                        Click="SpreadModeItem_Click"
+                                        GroupName="SpreadMode"
+                                        Tag="Off"
+                                        Text="単ページ" />
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SpreadCoverItem"
+                                        Click="SpreadModeItem_Click"
+                                        GroupName="SpreadMode"
+                                        Tag="CoverSingle"
+                                        Text="見開き（表紙のみ単独）" />
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SpreadPairItem"
+                                        Click="SpreadModeItem_Click"
+                                        GroupName="SpreadMode"
+                                        Tag="PairFromStart"
+                                        Text="見開き（1ページ目から2枚ずつ）" />
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SpreadFirstTwoItem"
+                                        Click="SpreadModeItem_Click"
+                                        GroupName="SpreadMode"
+                                        Tag="FirstTwoSingle"
+                                        Text="見開き（1・2ページ目のみ単独）" />
+                                </MenuFlyout>
+                            </DropDownButton.Flyout>
+                        </DropDownButton>
+
+                        <ToggleButton
+                            x:Name="ReverseKeysToggle"
+                            MinWidth="0"
+                            Padding="10,6"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="ReverseKeysToggle_Click"
+                            Content="キー反転"
+                            CornerRadius="8"
+                            FontSize="12"
+                            Foreground="#E6FFFFFF"
+                            IsChecked="True"
+                            ToolTipService.ToolTip="左右キーと矢印ボタンのページ送り方向を反転" />
+
+                        <ToggleButton
+                            x:Name="RtlToggle"
+                            MinWidth="0"
+                            Padding="10,6"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="RtlToggle_Click"
+                            Content="右綴じ"
+                            CornerRadius="8"
+                            FontSize="12"
+                            Foreground="#E6FFFFFF"
+                            IsChecked="True"
+                            ToolTipService.ToolTip="右から左に表示中（クリックで左から右へ）" />
+
+                        <ToggleButton
+                            x:Name="PageNumberToggle"
+                            MinWidth="0"
+                            Padding="10,6"
+                            VerticalAlignment="Center"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="PageNumberToggle_Click"
+                            Content="ページ番号"
+                            CornerRadius="8"
+                            FontSize="12"
+                            Foreground="#E6FFFFFF"
+                            ToolTipService.ToolTip="右下にページ番号を表示" />
+
+                        <Button
+                            x:Name="OpenFileButton"
+                            Click="OpenButton_Click"
+                            Content="&#xE8E5;"
+                            Style="{StaticResource ViewerIconButtonStyle}"
+                            ToolTipService.ToolTip="PDFを開く (Ctrl+O)" />
+
+                        <Button
+                            x:Name="FullScreenButton"
+                            Click="FullScreenButton_Click"
+                            Content="&#xE740;"
+                            Style="{StaticResource ViewerIconButtonStyle}"
+                            ToolTipService.ToolTip="全画面 (F11)" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

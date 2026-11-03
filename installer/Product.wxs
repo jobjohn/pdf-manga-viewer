@@ -24,6 +24,10 @@
 
     <Property Id="ARPCOMMENTS" Value="PDF manga viewer for Windows" />
 
+    <!-- 「アプリと機能」に表示するアイコン -->
+    <Icon Id="AppIcon.ico" SourceFile="..\Assets\AppIcon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">
         <Directory Id="INSTALLFOLDER" Name="PdfMangaViewer" />
@@ -34,8 +38,62 @@
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="PdfFileAssociation" />
     </Feature>
   </Package>
+
+  <!--
+    PDF の関連付け。既定のアプリを勝手に変えることはせず、
+    「プログラムから開く」と「設定 > 既定のアプリ」の候補に出るよう登録だけ行う。
+  -->
+  <Fragment>
+    <Component Id="PdfFileAssociation" Directory="INSTALLFOLDER" Guid="5D3C1E2A-8B47-4F1D-9C6E-2A7B3F4D8E91">
+      <!-- ProgID -->
+      <RegistryKey Root="HKCU" Key="Software\Classes\PdfMangaViewer.pdf">
+        <RegistryValue Type="string" Value="PDF ドキュメント (PDF Manga Viewer)" />
+        <RegistryValue Name="FriendlyTypeName" Type="string" Value="PDF ドキュメント" />
+      </RegistryKey>
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\PdfMangaViewer.pdf\DefaultIcon"
+          Type="string"
+          Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot;,0" />
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\PdfMangaViewer.pdf\shell\open\command"
+          Type="string"
+          Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot; &quot;%1&quot;" />
+
+      <!-- 「プログラムから開く」の候補 -->
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\.pdf\OpenWithProgids"
+          Name="PdfMangaViewer.pdf"
+          Type="string"
+          Value="" />
+      <RegistryKey Root="HKCU" Key="Software\Classes\Applications\PdfMangaViewer.exe">
+        <RegistryValue Name="FriendlyAppName" Type="string" Value="PDF Manga Viewer" />
+        <RegistryValue Key="SupportedTypes" Name=".pdf" Type="string" Value="" />
+        <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot;,0" />
+        <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot; &quot;%1&quot;" />
+      </RegistryKey>
+
+      <!-- 「設定 > アプリ > 既定のアプリ」に表示するための登録 -->
+      <RegistryKey Root="HKCU" Key="Software\PdfMangaViewer\Capabilities">
+        <RegistryValue Name="ApplicationName" Type="string" Value="PDF Manga Viewer" />
+        <RegistryValue Name="ApplicationDescription" Type="string" Value="PDF の漫画を画面いっぱいに表示するビューワ" />
+        <RegistryValue Name="ApplicationIcon" Type="string" Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot;,0" />
+        <RegistryValue Key="FileAssociations" Name=".pdf" Type="string" Value="PdfMangaViewer.pdf" />
+      </RegistryKey>
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\RegisteredApplications"
+          Name="PDF Manga Viewer"
+          Type="string"
+          Value="Software\PdfMangaViewer\Capabilities"
+          KeyPath="yes" />
+    </Component>
+  </Fragment>
 
   <Fragment>
     <StandardDirectory Id="ProgramMenuFolder">
