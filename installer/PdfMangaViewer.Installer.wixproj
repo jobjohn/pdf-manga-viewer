@@ -1,7 +1,10 @@
 <Project Sdk="WixToolset.Sdk/5.0.2">
 
   <PropertyGroup>
-    <OutputName>PdfMangaViewer-Setup-0.0.1</OutputName>
+    <!-- build-installer.ps1 から -p:AppVersion=x.y.z で渡す -->
+    <AppVersion Condition="'$(AppVersion)' == ''">0.0.0</AppVersion>
+    <DefineConstants>AppVersion=$(AppVersion)</DefineConstants>
+    <OutputName>PdfMangaViewer-Setup-$(AppVersion)</OutputName>
     <OutputPath>dist\</OutputPath>
     <Platform>x64</Platform>
     <InstallerPlatform>x64</InstallerPlatform>

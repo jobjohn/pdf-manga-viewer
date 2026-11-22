@@ -75,7 +75,16 @@ dotnet publish -c Release -r win-x64
 .\installer\build-installer.ps1
 ```
 
-`dotnet publish`、インストーラー用ファイル一覧の生成、MSI のビルドをまとめて実行します。
+`dotnet publish`、インストーラー用ファイル一覧の生成、MSI のビルドをまとめて実行します。バージョンは `PdfMangaViewer.csproj` の `<Version>` が使われます（`-Version 0.0.2` のように指定して上書きもできます）。
+
+### リリース手順
+
+`v0.0.2` のような形式のタグを push すると、GitHub Actions（[.github/workflows/release.yml](.github/workflows/release.yml)）が `windows-latest` で MSI をビルドし、GitHub Release に自動で公開します。バージョンはタグから取られます。
+
+```powershell
+git tag v0.0.2
+git push origin v0.0.2
+```
 
 ## キー操作
 

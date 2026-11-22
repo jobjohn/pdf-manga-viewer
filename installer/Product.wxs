@@ -5,8 +5,7 @@
   <Package
       Name="PDF Manga Viewer"
       Manufacturer="PdfMangaViewer"
-      Version="0.0.1"
-      ProductCode="72BF2822-A7AD-4030-A548-F2F32E46E0AA"
+      Version="$(var.AppVersion)"
       UpgradeCode="842FE880-FF45-4A5F-9470-C251764A2CE3"
       Scope="perUser"
       Language="1041"
@@ -131,7 +130,7 @@
           <Shortcut
               Id="StartMenuShortcutLnk"
               Name="PDF Manga Viewer"
-              Description="PDF Manga Viewer 0.0.1"
+              Description="PDF Manga Viewer $(var.AppVersion)"
               Target="[INSTALLFOLDER]PdfMangaViewer.exe"
               WorkingDirectory="INSTALLFOLDER" />
           <RemoveFolder Id="RemoveAppStartMenuFolder" Directory="AppStartMenuFolder" On="uninstall" />
@@ -153,7 +152,7 @@
         <Shortcut
             Id="DesktopShortcutLnk"
             Name="PDF Manga Viewer"
-            Description="PDF Manga Viewer 0.0.1"
+            Description="PDF Manga Viewer $(var.AppVersion)"
             Target="[INSTALLFOLDER]PdfMangaViewer.exe"
             WorkingDirectory="INSTALLFOLDER" />
         <RegistryValue
