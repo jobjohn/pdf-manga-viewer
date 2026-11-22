@@ -71,9 +71,37 @@
           Name="PdfMangaViewer.pdf"
           Type="string"
           Value="" />
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\.cbz\OpenWithProgids"
+          Name="PdfMangaViewer.cbz"
+          Type="string"
+          Value="" />
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\.zip\OpenWithProgids"
+          Name="PdfMangaViewer.cbz"
+          Type="string"
+          Value="" />
+      <RegistryKey Root="HKCU" Key="Software\Classes\PdfMangaViewer.cbz">
+        <RegistryValue Type="string" Value="コミックアーカイブ (PDF Manga Viewer)" />
+        <RegistryValue Name="FriendlyTypeName" Type="string" Value="コミックアーカイブ" />
+      </RegistryKey>
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\PdfMangaViewer.cbz\DefaultIcon"
+          Type="string"
+          Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot;,0" />
+      <RegistryValue
+          Root="HKCU"
+          Key="Software\Classes\PdfMangaViewer.cbz\shell\open\command"
+          Type="string"
+          Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot; &quot;%1&quot;" />
       <RegistryKey Root="HKCU" Key="Software\Classes\Applications\PdfMangaViewer.exe">
         <RegistryValue Name="FriendlyAppName" Type="string" Value="PDF Manga Viewer" />
         <RegistryValue Key="SupportedTypes" Name=".pdf" Type="string" Value="" />
+        <RegistryValue Key="SupportedTypes" Name=".cbz" Type="string" Value="" />
+        <RegistryValue Key="SupportedTypes" Name=".zip" Type="string" Value="" />
         <RegistryValue Key="DefaultIcon" Type="string" Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot;,0" />
         <RegistryValue Key="shell\open\command" Type="string" Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot; &quot;%1&quot;" />
       </RegistryKey>
@@ -81,9 +109,10 @@
       <!-- 「設定 > アプリ > 既定のアプリ」に表示するための登録 -->
       <RegistryKey Root="HKCU" Key="Software\PdfMangaViewer\Capabilities">
         <RegistryValue Name="ApplicationName" Type="string" Value="PDF Manga Viewer" />
-        <RegistryValue Name="ApplicationDescription" Type="string" Value="PDF の漫画を画面いっぱいに表示するビューワ" />
+        <RegistryValue Name="ApplicationDescription" Type="string" Value="PDF・ZIP/CBZ の漫画を画面いっぱいに表示するビューワ" />
         <RegistryValue Name="ApplicationIcon" Type="string" Value="&quot;[INSTALLFOLDER]PdfMangaViewer.exe&quot;,0" />
         <RegistryValue Key="FileAssociations" Name=".pdf" Type="string" Value="PdfMangaViewer.pdf" />
+        <RegistryValue Key="FileAssociations" Name=".cbz" Type="string" Value="PdfMangaViewer.cbz" />
       </RegistryKey>
       <RegistryValue
           Root="HKCU"

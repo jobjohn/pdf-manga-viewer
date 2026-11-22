@@ -19,19 +19,21 @@ public partial class App : Application
         _window = window;
         window.Activate();
 
-        // コマンドライン引数に PDF が渡されていればそのまま開く
-        var pdfPath = FindPdfArgument();
-        if (pdfPath is not null)
+        // コマンドライン引数に PDF / ZIP / CBZ / 画像 / フォルダが渡されていればそのまま開く
+        string? targetPath = FindTargetArgument();
+        if (targetPath is not null)
         {
-            window.ScheduleOpen(pdfPath);
+            window.ScheduleOpen(targetPath);
         }
     }
 
-    private static string? FindPdfArgument()
+    private static string? FindTargetArgument()
     {
-        foreach (var arg in Environment.GetCommandLineArgs())
+        string[] cmdArgs = Environment.GetCommandLineArgs();
+        for (int i = 1; i < cmdArgs.Length; i++)
         {
-            if (arg.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) && File.Exists(arg))
+            string arg = cmdArgs[i];
+            if (MangaDocumentFactory.IsSupportedPath(arg))
             {
                 return arg;
             }
