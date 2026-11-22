@@ -57,7 +57,7 @@ dotnet publish -c Release -r win-x64
 
 ## インストーラー
 
-`installer\dist\PdfMangaViewer-Setup-0.0.1.msi` を実行するとインストールできます。
+[Releases](https://github.com/jobjohn/pdf-manga-viewer/releases) から `PdfMangaViewer-Setup-<バージョン>.msi` をダウンロードして実行するとインストールできます（自分でビルドした場合は `installer\dist\` に出力されます）。
 
 - インストール先: `%LOCALAPPDATA%\Programs\PdfMangaViewer`
 - スタートメニューとデスクトップにショートカットを作成
@@ -110,3 +110,7 @@ dotnet publish -c Release -r win-x64
 - 見開きモードと読み方向（右綴じ）の設定は `%LOCALAPPDATA%\PdfMangaViewer\settings.json` に保存しています。
 - レンダリング画像の長辺は 2600px を上限にしてメモリ使用量を抑えています。
 - WinUI が生成する `.xbf` とアプリ用の `.pri` は `dotnet publish` に含まれないことがあるため、`CopyWinUIResourcesToPublish` ターゲットで公開フォルダーへコピーしています。
+
+## ライセンス
+
+[MIT License](LICENSE)
